@@ -1,4 +1,5 @@
 import express from "express";
+import axios from "axios";
 import TelegramBot from "node-telegram-bot-api";
 
 const token = process.env.BOT_TOKEN;
@@ -15,6 +16,17 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
+  async function getFundingAbove(limit = 0.002) {
+  const url = "https://fapi.binance.com/fapi/v1/premiumIndex";
+
+  const response = await axios.get(url);
+  const data = response.data;
+
+  return data.filter(item => {
+    const rate = Number(item.lastFundingRate);
+    return Math.abs(rate) >= limit;
+  });
+}
   console.log(`Web server listening on ${PORT}`);
 });
 
