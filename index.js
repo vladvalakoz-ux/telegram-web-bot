@@ -11,18 +11,18 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const bot = new TelegramBot(BOT_TOKEN);
 bot.setWebHook(`${WEBHOOK_URL}/telegram`);
 
-/* Bybit */
+/* OKX */
 async function getFundingAbove(limit = 0.002) {
   const response = await axios.get(
-    "https://api.bybit.com/v5/market/tickers?category=linear"
+    "https://www.okx.com/api/v5/public/funding-rate"
   );
 
-  const data = response.data.result.list;
+  const data = response.data.data;
 
   return data
     .filter(i => Math.abs(Number(i.fundingRate)) >= limit)
     .map(i => ({
-      symbol: i.symbol,
+      symbol: i.instId,
       fundingRate: Number(i.fundingRate)
     }));
 }
