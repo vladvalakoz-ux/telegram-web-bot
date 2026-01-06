@@ -1,0 +1,12 @@
+{
+  "name": "telegram-web-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0",
+    "node-telegram-bot-api": "^0.64.0"
+  }
+}
