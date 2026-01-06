@@ -5,51 +5,34 @@ import TelegramBot from "node-telegram-bot-api";
 const app = express();
 app.use(express.json());
 
+/* ENV */
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
 if (!BOT_TOKEN || !WEBHOOK_URL) {
-  console.error("ENV vars missing");
+  console.error("ENV variables missing");
   process.exit(1);
 }
 
-/* TELEGRAM */
+/* TELEGRAM BOT (WEBHOOK) */
 const bot = new TelegramBot(BOT_TOKEN);
 bot.setWebHook(`${WEBHOOK_URL}/telegram`);
 
 /* OKX FUNDING */
 async function getFundingAbove(limit = 0.002) {
-  // 1️⃣ всі perpetual
-  const instrumentsRes = await axios.get(
-    "https://www.okx.com/api/v5/public/instruments",
-    { params: { instType: "SWAP" } }
+  const res = await axios.get(
+    "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
   );
 
-  const instruments = instrumentsRes.data.data;
-  const result = [];
-
-  // 2️⃣ funding по кожному
-  for (const inst of instruments) {
-    try {
-      const frRes = await axios.get(
-        "https://www.okx.com/api/v5/public/funding-rate",
-        { params: { instId: inst.instId } }
-      );
-
-      const rate = Number(frRes.data.data[0].fundingRate);
-
-      if (Math.abs(rate) >= limit) {
-        result.push({
-          symbol: inst.instId,
-          fundingRate: rate
-        });
-      }
-    } catch (e) {
-      // пропускаємо помилки
-    }
-  }
-
-  return result;
+  return res.data.data
+    .filter(i => i.fundingRate !== "")
+    .filter(i => Math.abs(Number(i.fundingRate)) >= limit)
+    .sort((a, b) => Math.abs(b.fundingRate) - Math.abs(a.fundingRate))
+    .slice(0, 10)
+    .map(i => ({
+      symbol: i.instId,
+      funding: Number(i.fundingRate)
+    }));
 }
 
 /* TELEGRAM WEBHOOK */
@@ -68,20 +51,20 @@ bot.on("message", async msg => {
     }
 
     const text = data
-      .slice(0, 10)
-      .map(
-        i => `${i.symbol}: ${(i.fundingRate * 100).toFixed(2)}%`
-      )
+      .map(i => `${i.symbol}: ${(i.funding * 100).toFixed(2)}%`)
       .join("\n");
 
-    bot.sendMessage(msg.chat.id, text);
-  } else {
-    bot.sendMessage(msg.chat.id, "Напиши /funding");
+    return bot.sendMessage(msg.chat.id, text);
   }
+
+  bot.sendMessage(msg.chat.id, "Команда: /funding");
 });
 
 /* WEB */
-app.get("/", (_, res) => res.send("OK"));
+app.get("/", (req, res) => res.send("OK"));
 
+/* START */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server started"));
+app.listen(PORT, () => {
+  console.log("Server started on", PORT);
+});
