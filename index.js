@@ -2,59 +2,48 @@ import express from "express";
 import axios from "axios";
 import TelegramBot from "node-telegram-bot-api";
 
-const token = process.env.BOT_TOKEN;
-if (!token) {
-  console.error("BOT_TOKEN not set");
-  process.exit(1);
-}
-
 const app = express();
+app.use(express.json());
 
-/* =========================
-   BINANCE FUNDING FUNCTION
-========================= */
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
+
+const bot = new TelegramBot(BOT_TOKEN);
+bot.setWebHook(`${WEBHOOK_URL}/telegram`);
+
+/* BINANCE */
 async function getFundingAbove(limit = 0.002) {
-  const url = "https://fapi.binance.com/fapi/v1/premiumIndex";
-  const response = await axios.get(url);
-
-  return response.data.filter(item => {
-    const rate = Number(item.lastFundingRate);
-    return Math.abs(rate) >= limit;
-  });
+  const res = await axios.get("https://fapi.binance.com/fapi/v1/premiumIndex");
+  return res.data.filter(i => Math.abs(+i.lastFundingRate) >= limit);
 }
 
-/* =========================
-   WEB ROUTES
-========================= */
-app.get("/", (req, res) => {
-  res.send("OK");
+/* TELEGRAM WEBHOOK */
+app.post("/telegram", (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
 });
 
-app.get("/funding", async (req, res) => {
-  try {
-    const data = await getFundingAbove(0.002);
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+/* COMMAND */
+bot.on("message", async msg => {
+  if (msg.text === "/funding") {
+    const data = await getFundingAbove();
+    if (!data.length) {
+      return bot.sendMessage(msg.chat.id, "Немає funding > 0.2%");
+    }
+
+    const text = data
+      .slice(0, 10)
+      .map(i => `${i.symbol}: ${(i.lastFundingRate * 100).toFixed(2)}%`)
+      .join("\n");
+
+    bot.sendMessage(msg.chat.id, text);
+  } else {
+    bot.sendMessage(msg.chat.id, "Напиши /funding");
   }
 });
 
-/* =========================
-   START WEB SERVER
-========================= */
+/* WEB */
+app.get("/", (req, res) => res.send("OK"));
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Web server listening on ${PORT}`);
-});
-
-/* =========================
-   TELEGRAM BOT
-========================= */
-const bot = new TelegramBot(token, { polling: true });
-
-bot.on("message", msg => {
-  bot.sendMessage(msg.chat.id, "Бот працює ✅");
-});
-
-console.log("Telegram bot started 🚀");
-
+app.listen(PORT, () => console.log("Server started"));
